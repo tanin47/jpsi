@@ -1,16 +1,26 @@
 package tanin.jpsi;
 
+import com.eclipsesource.json.Json;
 import com.renomad.minum.web.FullSystem;
 import com.renomad.minum.web.Response;
 import com.renomad.minum.web.StatusLine;
+import org.bouncycastle.operator.OperatorCreationException;
 import tanin.ejwf.MinumBuilder;
+import tanin.ejwf.SelfSignedCertificate;
 
 import java.io.IOException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.util.Base64;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
 import static com.renomad.minum.web.RequestLine.Method.GET;
+import static com.renomad.minum.web.RequestLine.Method.POST;
 
 public class Main {
   private static final Logger logger = Logger.getLogger(Main.class.getName());
@@ -25,27 +35,43 @@ public class Main {
   }
 
   public static void main(String[] args) throws Exception {
-    var main = new Main(0);
+    var cert = SelfSignedCertificate.generate("localhost");
+    System.out.println("The below can be verified by opening a browser to the https endpoint:");
+    System.out.println("  Certificate SHA-256 Fingerprint: " + SelfSignedCertificate.getSHA256Fingerprint(cert.cert().getEncoded()));
+    System.out.println("  Public Key SHA-256 Fingerprint: " + SelfSignedCertificate.getSHA256Fingerprint(cert.keyPair().getPublic().getEncoded()));
+
+    var csrfToken = SelfSignedCertificate.generateRandomString();
+    System.out.println("The csrf token: " + csrfToken);
+    var main = new Main(19999, cert, csrfToken);
     main.start();
-    var browser = new Browser(args, "http://localhost:8443", false, false);
+
+    var browser = new Browser(args, "https://localhost:8443", false, false, cert, csrfToken);
+
     main.minum.block();
   }
 
   int port;
   public FullSystem minum;
+  SelfSignedCertificate cert;
+  String csrfToken;
 
-  public Main(int port) {
+  public Main(int port, SelfSignedCertificate cert, String csrfToken) {
     this.port = port;
+    this.cert = cert;
+    this.csrfToken = csrfToken;
   }
 
-  public void start() {
-    minum = MinumBuilder.build(port);
+  public void start() throws CertificateException, KeyStoreException, IOException, NoSuchAlgorithmException, OperatorCreationException {
+    var keyStorePassword = SelfSignedCertificate.generateRandomString();
+    var keyStoreFile = SelfSignedCertificate.generateKeyStoreFile(cert, keyStorePassword);
+    minum = MinumBuilder.build(port, keyStoreFile.getAbsolutePath(), keyStorePassword, csrfToken);
     var wf = minum.getWebFramework();
 
     wf.registerPath(
       GET,
       "",
       r -> {
+        System.out.println(r.getHeaders().valueByKey("Csrf-Token"));
         logger.info("Serve /");
         String content = new String(Main.class.getResourceAsStream("/html/index.html").readAllBytes());
         return Response.htmlOk(content);
@@ -57,6 +83,27 @@ public class Main {
       "healthcheck",
       req -> {
         return Response.buildResponse(StatusLine.StatusCode.CODE_200_OK, Map.of("Content-Type", "text/plain"), "OK EWJF");
+      }
+    );
+
+    AtomicInteger counter = new AtomicInteger();
+
+    wf.registerPath(
+      POST,
+      "ask-java",
+      req -> {
+        System.out.println(req.getHeaders().valueByKey("Csrf-Token"));
+        var json = Json.parse(req.getBody().asString());
+        var msg = json.asObject().get("msg").asString();
+        System.out.println("Javascripts said: " + msg);
+        Thread.sleep(5000);
+        return Response.buildResponse(
+          StatusLine.StatusCode.CODE_200_OK,
+          Map.of("Content-Type", "application/json"),
+          Json.object()
+            .add("response", "Hello from Java (" + counter.getAndIncrement() + ")")
+            .toString()
+        );
       }
     );
   }

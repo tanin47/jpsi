@@ -10,17 +10,26 @@ import org.cef.CefApp.CefAppState;
 import org.cef.CefClient;
 import org.cef.CefSettings;
 import org.cef.browser.CefBrowser;
-import org.cef.handler.CefAppHandlerAdapter;
-import org.cef.handler.CefFocusHandlerAdapter;
+import org.cef.browser.CefFrame;
+import org.cef.callback.CefCallback;
+import org.cef.handler.*;
+import org.cef.misc.BoolRef;
+import org.cef.network.CefRequest;
+import org.cef.security.CefSSLInfo;
+import tanin.ejwf.SelfSignedCertificate;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 
 public class Browser extends JFrame {
@@ -29,7 +38,10 @@ public class Browser extends JFrame {
   private final CefClient client_;
   private final CefBrowser browser_;
   private final Component browerUI_;
+  private final SelfSignedCertificate cert_;
+  private final String csrfToken_;
   private boolean browserFocus_ = true;
+
 
   /**
    * To display a simple browser window, it suffices completely to create an
@@ -38,7 +50,16 @@ public class Browser extends JFrame {
    * But to be more verbose, this CTOR keeps an instance of each object on the
    * way to the browser UI.
    */
-  Browser(String[] args, String startURL, boolean useOSR, boolean isTransparent) throws Exception {
+  Browser(
+    String[] args,
+    String startURL,
+    boolean useOSR,
+    boolean isTransparent,
+    SelfSignedCertificate cert,
+    String csrfToken
+  ) throws Exception {
+    csrfToken_ = csrfToken;
+    cert_ = cert;
     if (!CefApp.startup(args)) {
       throw new Exception();
     }
@@ -98,6 +119,51 @@ public class Browser extends JFrame {
     browser_ = client_.createBrowser(startURL, useOSR, isTransparent);
     browerUI_ = browser_.getUIComponent();
 
+    client_.addRequestHandler(new CefRequestHandlerAdapter() {
+
+      @Override
+      public CefResourceRequestHandler getResourceRequestHandler(CefBrowser browser, CefFrame frame, CefRequest request, boolean isNavigation, boolean isDownload, String requestInitiator, BoolRef disableDefaultHandling) {
+        return new CefResourceRequestHandlerAdapter() {
+          @Override
+          public boolean onBeforeResourceLoad(CefBrowser browser, CefFrame frame, CefRequest request) {
+            try {
+              var uri = new URI(request.getURL());
+              var host = uri.getHost().toLowerCase();
+
+              if (host.equals("localhost")) {
+                request.setHeaderByName("Java-Electron-Csrf-Token", csrfToken_, true);
+              }
+            } catch (URISyntaxException e) {
+              throw new RuntimeException(e);
+            }
+            return false;
+          }
+        };
+      }
+
+      @Override
+      public boolean onCertificateError(CefBrowser browser, CefLoadHandler.ErrorCode cert_error, String request_url, CefSSLInfo sslInfo, CefCallback callback) {
+        try {
+          var uri = new URI(request_url);
+          var host = uri.getHost().toLowerCase();
+          if (host.equals("localhost")) {
+            // ok
+          } else {
+            callback.cancel();
+            return true;
+          }
+        } catch (URISyntaxException e) {
+          throw new RuntimeException(e);
+        }
+
+        if (sslInfo.certificate.getSubjectCertificate().equals(cert_.cert())) {
+          callback.Continue();
+        } else {
+          callback.cancel();
+        }
+        return true;
+      }
+    });
 
     // Clear focus from the address field when the browser gains focus.
     client_.addFocusHandler(new CefFocusHandlerAdapter() {
@@ -114,7 +180,6 @@ public class Browser extends JFrame {
         browserFocus_ = false;
       }
     });
-
     // (5) All UI components are assigned to the default content pane of this
     //     JFrame and afterwards the frame is made visible to the user.
     getContentPane().add(browerUI_, BorderLayout.CENTER);
@@ -132,5 +197,14 @@ public class Browser extends JFrame {
         dispose();
       }
     });
+
+    Thread.sleep(5000);
+    var devTool = browser_.getDevTools(new Point(0, 0));
+
+    var devToolsDialog = new JDialog();
+    devToolsDialog.setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
+    devToolsDialog.setSize(800, 600);
+    devToolsDialog.getContentPane().add(devTool.getUIComponent(), BorderLayout.CENTER);
+    devToolsDialog.setVisible(true);
   }
 }

@@ -47,6 +47,8 @@ repositories {
 
 dependencies {
     implementation("com.renomad:minum:8.2.0")
+    implementation("org.bouncycastle:bcpkix-lts8on:2.73.9")
+    implementation("com.eclipsesource.minimal-json:minimal-json:0.9.5")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

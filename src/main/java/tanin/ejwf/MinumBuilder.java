@@ -3,21 +3,25 @@ package tanin.ejwf;
 import com.renomad.minum.logging.Logger;
 import com.renomad.minum.state.Constants;
 import com.renomad.minum.state.Context;
-import com.renomad.minum.web.FullSystem;
-import com.renomad.minum.web.Response;
-import com.renomad.minum.web.StatusLine;
+import com.renomad.minum.web.*;
+import org.bouncycastle.operator.OperatorCreationException;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 import static com.renomad.minum.web.RequestLine.Method.GET;
+import static com.renomad.minum.web.StatusLine.StatusCode.CODE_403_FORBIDDEN;
 
 public class MinumBuilder {
   private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(MinumBuilder.class.getName());
@@ -42,22 +46,40 @@ public class MinumBuilder {
 
   public static final boolean IS_LOCAL_DEV = Files.exists(Path.of("local_dev_marker.ejwf"));
 
-  public static FullSystem build(int port) {
+  public static FullSystem build(int port, String keyStorePath, String keyStorePassword, String csrfToken) throws CertificateException, KeyStoreException, IOException, NoSuchAlgorithmException, OperatorCreationException {
     if (IS_LOCAL_DEV) {
       logger.info("Running in the local development mode. Hot-Reload Module is enabled. `npm run hmr` must be running in a separate terminal");
     } else {
       logger.info("Running in the production mode.");
     }
 
+
     var props = new Properties();
     props.setProperty("SERVER_PORT", "" + port);
     props.setProperty("LOG_LEVELS", "ASYNC_ERROR,AUDIT");
     props.setProperty("IS_THE_BRIG_ENABLED", "false");
 
+    props.setProperty("KEYSTORE_PATH", keyStorePath);
+    props.setProperty("KEYSTORE_PASSWORD", keyStorePassword);
+
     var context = new Context(Executors.newVirtualThreadPerTaskExecutor(), new Constants(props));
     context.setLogger(new Logger(context.getConstants(), context.getExecutorService(), "primary logger"));
     var minum = new FullSystem(context).start();
     var wf = minum.getWebFramework();
+
+    wf.registerPreHandler((inputs) -> {
+      var request = inputs.clientRequest();
+      var csrfTokens = request.getHeaders().valueByKey("Java-Electron-Csrf-Token");
+
+      if (csrfTokens != null && !csrfTokens.isEmpty() && csrfTokens.getFirst().equals(csrfToken)) {
+        // ok
+      } else {
+        return Response.buildResponse(CODE_403_FORBIDDEN, Map.of(), "Java-Electron-Csrf-Token is invalid.");
+      }
+
+      ThrowingFunction<IRequest, IResponse> endpoint = inputs.endpoint();
+      return endpoint.apply(inputs.clientRequest());
+    });
 
     if (IS_LOCAL_DEV) {
       var httpClient = java.net.http.HttpClient.newHttpClient();

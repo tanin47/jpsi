@@ -1,5 +1,6 @@
 package tanin.jpsi;
 
+import org.bouncycastle.operator.OperatorCreationException;
 import org.junit.jupiter.api.*;
 import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -8,7 +9,11 @@ import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.logging.LogType;
 import org.openqa.selenium.logging.LoggingPreferences;
 
+import java.io.IOException;
 import java.net.URISyntaxException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -56,7 +61,7 @@ public class Base {
   }
 
   @BeforeEach
-  void setUp() throws SQLException, URISyntaxException {
+  void setUp() throws SQLException, URISyntaxException, CertificateException, KeyStoreException, IOException, NoSuchAlgorithmException, OperatorCreationException {
     server = new Main(PORT);
     server.start();
   }
