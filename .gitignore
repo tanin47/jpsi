@@ -11,3 +11,4 @@ SYSTEM_RUNNING
 .gradle
 build
 jdk
+hr_err_*.log

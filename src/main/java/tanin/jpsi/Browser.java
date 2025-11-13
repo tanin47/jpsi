@@ -16,6 +16,7 @@ import org.cef.handler.*;
 import org.cef.misc.BoolRef;
 import org.cef.network.CefRequest;
 import org.cef.security.CefSSLInfo;
+import tanin.ejwf.MinumBuilder;
 import tanin.ejwf.SelfSignedCertificate;
 
 import javax.swing.*;
@@ -27,12 +28,14 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 
 public class Browser extends JFrame {
+  private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(Browser.class.getName());
   private static final long serialVersionUID = -5570653778104813836L;
   private final CefApp cefApp_;
   private final CefClient client_;
@@ -51,7 +54,6 @@ public class Browser extends JFrame {
    * way to the browser UI.
    */
   Browser(
-    String[] args,
     String startURL,
     boolean useOSR,
     boolean isTransparent,
@@ -60,14 +62,22 @@ public class Browser extends JFrame {
   ) throws Exception {
     csrfToken_ = csrfToken;
     cert_ = cert;
-    if (!CefApp.startup(args)) {
-      throw new Exception();
+
+    var javaHome = System.getProperty("java.home");
+    var cefParent = Path.of(javaHome).getParent();
+    if (!cefParent.resolve("Frameworks").toFile().exists()) {
+      // This is in a package.
+      cefParent = Path.of(javaHome).getParent().getParent().getParent();
     }
 
-    JCefAppConfig config = JCefAppConfig.getInstance();
-    List<String> appArgs = new ArrayList<>(Arrays.asList(args));
+    logger.info("CEF: " + cefParent.resolve("Frameworks").toFile().getAbsolutePath());
+
+    CefApp.startup(new String[] { "--framework-dir-path=" + cefParent.resolve("Frameworks").resolve("Chromium Embedded Framework.framework").toFile().getAbsolutePath() });
+
+    JCefAppConfig config = JCefAppConfig.getInstance(cefParent.toFile().getAbsolutePath());
+    List<String> appArgs = new ArrayList<>();
     appArgs.addAll(config.getAppArgsAsList());
-    args = appArgs.toArray(new String[0]);
+    var args = appArgs.toArray(new String[0]);
 
     // (1) The entry point to JCEF is always the class CefApp. There is only one
     //     instance per application and therefore you have to call the method
@@ -77,6 +87,7 @@ public class Browser extends JFrame {
     //     required native libraries, initializes CEF accordingly, starts a
     //     background task to handle CEF's message loop and takes care of
     //     shutting down CEF after disposing it.
+
     CefApp.addAppHandler(new CefAppHandlerAdapter(args) {
       @Override
       public void stateHasChanged(org.cef.CefApp.CefAppState state) {
@@ -85,7 +96,8 @@ public class Browser extends JFrame {
       }
     });
     CefSettings settings = config.getCefSettings();
-    settings.windowless_rendering_enabled = useOSR;
+    settings.windowless_rendering_enabled = true;
+    settings.log_severity = CefSettings.LogSeverity.LOGSEVERITY_VERBOSE;
     cefApp_ = CefApp.getInstance(settings);
 
     // (2) JCEF can handle one to many browser instances simultaneous. These
@@ -183,6 +195,8 @@ public class Browser extends JFrame {
     // (5) All UI components are assigned to the default content pane of this
     //     JFrame and afterwards the frame is made visible to the user.
     getContentPane().add(browerUI_, BorderLayout.CENTER);
+    setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+    setResizable(true);
     pack();
     setSize(800, 600);
     setVisible(true);
@@ -195,6 +209,7 @@ public class Browser extends JFrame {
       public void windowClosing(WindowEvent e) {
         CefApp.getInstance().dispose();
         dispose();
+        System.exit(0);
       }
     });
 

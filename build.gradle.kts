@@ -1,14 +1,11 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import org.jreleaser.model.Active
-import org.jreleaser.model.Signing.Mode
+import org.panteleyev.jpackage.JPackageTask
 
 plugins {
     `java-library`
     application
-    `maven-publish`
     jacoco
-    id("org.jreleaser") version "1.21.0"
-    id("com.gradleup.shadow") version "9.2.2"
+    id("org.panteleyev.jpackageplugin") version "1.7.6"
 }
 
 group = "tanin.jpsi"
@@ -21,7 +18,6 @@ java {
         languageVersion.set(JavaLanguageVersion.of(21))
     }
     withSourcesJar()
-    withJavadocJar()
     sourceSets {
         main {
             resources {
@@ -46,9 +42,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.renomad:minum:8.2.0")
     implementation("org.bouncycastle:bcpkix-lts8on:2.73.9")
-    implementation("com.eclipsesource.minimal-json:minimal-json:0.9.5")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -79,72 +73,6 @@ application {
 tasks.jar {
     manifest.attributes["Main-Class"] = mainClassName
 }
-
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            groupId = "io.github.tanin47"
-            artifactId = "jpsi"
-            version = project.version.toString()
-            artifact(tasks.shadowJar)
-            artifact(tasks["sourcesJar"])
-            artifact(tasks["javadocJar"])
-
-            pom {
-                name.set("jpsi")
-                description.set("An example of Jpsi.")
-                url.set("https://github.com/tanin47/Jpsi")
-                inceptionYear.set("2025")
-                licenses {
-                    license {
-                        name.set("MIT")
-                        url.set("https://spdx.org/licenses/MIT.html")
-                    }
-                }
-                developers {
-                    developer {
-                        id.set("tanin47")
-                        name.set("Tanin Na Nakorn")
-                    }
-                }
-                scm {
-                    connection.set("scm:git:https://github.com/tanin47/embeddable-java-web-framework.git")
-                    developerConnection.set("scm:git:ssh://github.com/tanin47/embeddable-java-web-framework.git")
-                    url.set("http://github.com/tanin47/embeddable-java-web-framework")
-                }
-            }
-        }
-    }
-
-    repositories {
-        maven {
-            url = uri(layout.buildDirectory.dir("staging-deploy"))
-        }
-    }
-}
-
-jreleaser {
-    signing {
-        active = Active.ALWAYS
-        armored = true
-        mode = if (System.getenv("CI") != null) Mode.MEMORY else Mode.COMMAND
-        command {
-            executable = "/opt/homebrew/bin/gpg"
-        }
-    }
-    deploy {
-        maven {
-            mavenCentral {
-                create("sonatype") {
-                    setActive("ALWAYS")
-                    url = "https://central.sonatype.com/api/v1/publisher"
-                    stagingRepository("build/staging-deploy")
-                }
-            }
-        }
-    }
-}
-
 
 tasks.register<Exec>("compileTailwind") {
     inputs.files(fileTree("frontend"))
@@ -190,17 +118,29 @@ tasks.named("sourcesJar") {
     dependsOn("compileSvelte")
 }
 
-tasks.shadowJar {
-    archiveClassifier.set("") // Remove the suffix -all.
-    relocate("com", "tanin.jpsi.com")
-    exclude("META-INF/MANIFEST.MF")
-    exclude("local_dev_marker.ejwf")
-
-}
-
 // For CI validation.
 tasks.register("printVersion") {
     doLast {
         print("$version")
     }
+}
+
+tasks.register("copyDependencies", Copy::class) {
+    from(configurations.runtimeClasspath).into(layout.buildDirectory.dir("jmods"))
+}
+
+tasks.register("copyJar", Copy::class) {
+    from(tasks.jar).into(layout.buildDirectory.dir("jmods"))
+}
+
+tasks.named<JPackageTask>("jpackage") {
+    dependsOn("assemble", "copyDependencies", "copyJar")
+    vendor = "tanin.jpsi"
+    destination = layout.buildDirectory.dir("dist")
+    println(System.getProperty("java.home"))
+    runtimeImage = File(System.getProperty("java.home"))
+    module = "tanin.jpsi/tanin.jpsi.Main"
+    modulePaths.setFrom(tasks.named("copyJar"))
+    mainClass = mainClassName
+    appContent.setFrom(System.getProperty("java.home") + "/../Frameworks")
 }

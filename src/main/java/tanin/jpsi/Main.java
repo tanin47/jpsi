@@ -36,18 +36,21 @@ public class Main {
 
   public static void main(String[] args) throws Exception {
     var cert = SelfSignedCertificate.generate("localhost");
-    System.out.println("The below can be verified by opening a browser to the https endpoint:");
-    System.out.println("  Certificate SHA-256 Fingerprint: " + SelfSignedCertificate.getSHA256Fingerprint(cert.cert().getEncoded()));
-    System.out.println("  Public Key SHA-256 Fingerprint: " + SelfSignedCertificate.getSHA256Fingerprint(cert.keyPair().getPublic().getEncoded()));
+    logger.info("The below can be verified by opening a browser to the https endpoint:");
+    logger.info("  Certificate SHA-256 Fingerprint: " + SelfSignedCertificate.getSHA256Fingerprint(cert.cert().getEncoded()));
+    logger.info("  Public Key SHA-256 Fingerprint: " + SelfSignedCertificate.getSHA256Fingerprint(cert.keyPair().getPublic().getEncoded()));
 
     var csrfToken = SelfSignedCertificate.generateRandomString();
-    System.out.println("The csrf token: " + csrfToken);
+    logger.info("The csrf token: " + csrfToken);
     var main = new Main(19999, cert, csrfToken);
+    logger.info("Starting...");
     main.start();
 
-    var browser = new Browser(args, "https://localhost:8443", false, false, cert, csrfToken);
+    var browser = new Browser("https://localhost:8443", false, false, cert, csrfToken);
 
-    main.minum.block();
+    logger.info("Blocking...");
+//    main.minum.block();
+    logger.info("Exiting");
   }
 
   int port;
@@ -64,14 +67,16 @@ public class Main {
   public void start() throws CertificateException, KeyStoreException, IOException, NoSuchAlgorithmException, OperatorCreationException {
     var keyStorePassword = SelfSignedCertificate.generateRandomString();
     var keyStoreFile = SelfSignedCertificate.generateKeyStoreFile(cert, keyStorePassword);
+    logger.info("Generated keystore file: " + keyStoreFile);
     minum = MinumBuilder.build(port, keyStoreFile.getAbsolutePath(), keyStorePassword, csrfToken);
     var wf = minum.getWebFramework();
+
+    logger.info("Registering Minum...");
 
     wf.registerPath(
       GET,
       "",
       r -> {
-        System.out.println(r.getHeaders().valueByKey("Csrf-Token"));
         logger.info("Serve /");
         String content = new String(Main.class.getResourceAsStream("/html/index.html").readAllBytes());
         return Response.htmlOk(content);
@@ -106,6 +111,7 @@ public class Main {
         );
       }
     );
+    logger.info("Finishing registering...");
   }
 
   public void stop() {

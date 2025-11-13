@@ -53,7 +53,6 @@ public class MinumBuilder {
       logger.info("Running in the production mode.");
     }
 
-
     var props = new Properties();
     props.setProperty("SERVER_PORT", "" + port);
     props.setProperty("LOG_LEVELS", "ASYNC_ERROR,AUDIT");
