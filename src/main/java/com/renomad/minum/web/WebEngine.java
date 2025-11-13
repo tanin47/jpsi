@@ -152,6 +152,7 @@ final class WebEngine {
    * Create an SSL Socket using a specified keystore
    */
   ServerSocket createSslSocketWithSpecificKeystore(int sslPort, URL keystoreUrl, String keystorePassword) {
+    logger.logDebug(() -> "KeyStore: " + keystoreUrl.toString());
     try (InputStream keystoreInputStream = keystoreUrl.openStream()) {
       final var keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
       char[] passwordCharArray = keystorePassword.toCharArray();

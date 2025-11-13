@@ -8,7 +8,6 @@ module tanin.jpsi {
   requires jdk.unsupported;
   requires java.net.http;
   requires jcef;
-  requires tanin.jpsi;
 
   // Export our public APIs/packages
   exports tanin.jpsi;

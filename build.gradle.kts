@@ -1,11 +1,11 @@
+import org.apache.tools.ant.taskdefs.Java
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import org.panteleyev.jpackage.JPackageTask
+import java.nio.file.Paths
 
 plugins {
     `java-library`
     application
     jacoco
-    id("org.panteleyev.jpackageplugin") version "1.7.6"
 }
 
 group = "tanin.jpsi"
@@ -133,14 +133,47 @@ tasks.register("copyJar", Copy::class) {
     from(tasks.jar).into(layout.buildDirectory.dir("jmods"))
 }
 
-tasks.named<JPackageTask>("jpackage") {
+tasks.register<Exec>("jdeps") {
+    dependsOn("assemble")
+    val jdepsBin = Paths.get(System.getProperty("java.home"), "bin", "jdeps")
+    commandLine(
+        jdepsBin,
+        "--module-path", tasks.named<JavaCompile>("compileJava").get().classpath.asPath,
+        "--multi-release", "base",
+        "--print-module-deps",
+        tasks.jar.get().outputs.files.asPath,
+    )
+}
+
+tasks.register<Exec>("jlink") {
     dependsOn("assemble", "copyDependencies", "copyJar")
-    vendor = "tanin.jpsi"
-    destination = layout.buildDirectory.dir("dist")
-    println(System.getProperty("java.home"))
-    runtimeImage = File(System.getProperty("java.home"))
-    module = "tanin.jpsi/tanin.jpsi.Main"
-    modulePaths.setFrom(tasks.named("copyJar"))
-    mainClass = mainClassName
-    appContent.setFrom(System.getProperty("java.home") + "/../Frameworks")
+    val jlinkBin = Paths.get(System.getProperty("java.home"), "bin", "jlink")
+    outputs.file("./build/jlink")
+
+    commandLine(
+        jlinkBin,
+        "--ignore-signing-information",
+        "--no-header-files", "--no-man-pages", "--strip-debug",
+        "-p", tasks.named("copyJar").get().outputs.files.singleFile.absolutePath,
+        "--add-modules", "java.base,java.desktop,java.logging,java.net.http,jcef,jdk.unsupported,org.bouncycastle.lts.pkix,org.bouncycastle.lts.prov,org.bouncycastle.lts.util,java.security.jgss,java.security.sasl,jdk.crypto.ec,jdk.crypto.cryptoki",
+        "--output", layout.buildDirectory.dir("jlink").get().asFile.absolutePath,
+    )
+}
+
+tasks.register<Exec>("jpackage") {
+    dependsOn("jlink")
+    val jreHome = "/Users/tanin/projects/jpsi/jdk/jbr_jcef-21.0.9-osx-aarch64-b895.147/Contents/Home"
+    val jpackageBin = Paths.get(System.getProperty("java.home"), "bin", "jpackage")
+
+    commandLine(
+        jpackageBin,
+        "--app-content", Paths.get(jreHome).parent.resolve("Frameworks").toFile().absolutePath,
+        "--main-class", mainClassName,
+        "--module", "tanin.jpsi/tanin.jpsi.Main",
+        "--runtime-image", tasks.named("jlink").get().outputs.files.singleFile.absolutePath,
+        "--vendor", "tanin.jpsi",
+        "--module-path", tasks.named("copyJar").get().outputs.files.singleFile.absolutePath,
+        "--dest", layout.buildDirectory.dir("dist").get().asFile.absolutePath,
+    )
+
 }

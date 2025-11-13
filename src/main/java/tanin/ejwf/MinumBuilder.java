@@ -55,7 +55,8 @@ public class MinumBuilder {
 
     var props = new Properties();
     props.setProperty("SERVER_PORT", "" + port);
-    props.setProperty("LOG_LEVELS", "ASYNC_ERROR,AUDIT");
+    props.setProperty("SSL_SERVER_PORT", "8444");
+//    props.setProperty("LOG_LEVELS", "ASYNC_ERROR,AUDIT");
     props.setProperty("IS_THE_BRIG_ENABLED", "false");
 
     props.setProperty("KEYSTORE_PATH", keyStorePath);

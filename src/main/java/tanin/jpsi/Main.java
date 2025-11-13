@@ -46,10 +46,10 @@ public class Main {
     logger.info("Starting...");
     main.start();
 
-    var browser = new Browser("https://localhost:8443", false, false, cert, csrfToken);
+    var browser = new Browser("https://localhost:8444", false, false, cert, csrfToken);
 
     logger.info("Blocking...");
-//    main.minum.block();
+    main.minum.block();
     logger.info("Exiting");
   }
 
