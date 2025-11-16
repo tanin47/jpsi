@@ -12,3 +12,4 @@ SYSTEM_RUNNING
 build
 jdk
 hr_err_*.log
+libwebview.dylib

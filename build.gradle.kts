@@ -1,6 +1,7 @@
-import org.apache.tools.ant.taskdefs.Java
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import java.lang.IllegalStateException
 import java.nio.file.Paths
+import kotlin.io.path.createTempDirectory
 
 plugins {
     `java-library`
@@ -39,10 +40,12 @@ tasks.jacocoTestReport {
 
 repositories {
     mavenCentral()
+    maven { url = uri("https://jitpack.io") }
 }
 
 dependencies {
     implementation("org.bouncycastle:bcpkix-lts8on:2.73.9")
+    implementation("com.github.webview:webview_java:1.3.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -68,6 +71,7 @@ tasks.named<Test>("test") {
 var mainClassName = "tanin.javaelectron.Main"
 application {
     mainClass.set(mainClassName)
+    applicationDefaultJvmArgs = listOf("-XstartOnFirstThread")
 }
 
 tasks.jar {
@@ -133,6 +137,73 @@ tasks.register("copyJar", Copy::class) {
     from(tasks.jar).into(layout.buildDirectory.dir("jmods"))
 }
 
+private fun runCmd(vararg args: String) {
+    println("Executing command: ${args.joinToString(" ")}")
+
+    val retVal = ProcessBuilder(*args)
+        .start()
+        .waitFor()
+
+    if (retVal != 0) {
+        throw IllegalStateException("Command execution failed with return value: $retVal")
+    }
+}
+
+private fun signInJar(jarFile: File) {
+    val tmpDir = createTempDirectory("MacosCodesignLibsInJarsTask").toFile()
+    runCmd("unzip", "-q", jarFile.absolutePath, "-d", tmpDir.absolutePath)
+
+    tmpDir.walk()
+        .filter { it.isFile && (it.extension == "dylib" || it.extension == "jnilib") }
+        .forEach { libFile ->
+            println("")
+            runCmd(
+                "codesign",
+                "-vvvv",
+                "--options",
+                "runtime",
+                "--entitlements",
+                "entitlements.plist",
+                "--timestamp",
+                "--force",
+                "--prefix",
+                "tanin.javaelectron.macos.",
+                "--sign",
+                "Developer ID Application: Tanin Na Nakorn (S6482XAL5E)",
+                libFile.absolutePath
+            )
+
+            runCmd(
+                "jar",
+                "-uvf",
+                jarFile.absolutePath,
+                "-C", tmpDir.absolutePath,
+                libFile.relativeToOrSelf(tmpDir).path
+            )
+        }
+
+    tmpDir.deleteRecursively()
+}
+
+tasks.register("macosCodesignLibsInJars") {
+    dependsOn("copyDependencies", "copyJar")
+    inputs.files(tasks.named("copyJar").get().outputs.files)
+
+    doLast {
+        inputs.files.forEach { file ->
+            println("Process: ${file.absolutePath}")
+
+            if (file.isDirectory) {
+                file.walk()
+                    .filter { it.isFile && it.extension == "jar" }
+                    .forEach { signInJar(it) }
+            } else if (file.extension == "jar") {
+                signInJar(file)
+            }
+        }
+    }
+}
+
 tasks.register<Exec>("jdeps") {
     dependsOn("assemble")
     val jdepsBin = Paths.get(System.getProperty("java.home"), "bin", "jdeps")
@@ -146,7 +217,7 @@ tasks.register<Exec>("jdeps") {
 }
 
 tasks.register<Exec>("jlink") {
-    dependsOn("assemble", "copyDependencies", "copyJar")
+    dependsOn("assemble", "macosCodesignLibsInJars")
     val jlinkBin = Paths.get(System.getProperty("java.home"), "bin", "jlink")
 
     inputs.files(tasks.named("copyJar").get().outputs.files)
@@ -158,7 +229,8 @@ tasks.register<Exec>("jlink") {
         "--ignore-signing-information",
         "--strip-native-commands", "--no-header-files", "--no-man-pages", "--strip-debug",
         "-p", inputs.files.singleFile.absolutePath,
-        "--add-modules", "java.base,java.desktop,java.logging,java.net.http,jcef,jdk.unsupported,org.bouncycastle.lts.pkix,org.bouncycastle.lts.prov,org.bouncycastle.lts.util,java.security.jgss,java.security.sasl,jdk.crypto.ec,jdk.crypto.cryptoki",
+        "--module-path", "${System.getProperty("java.home")}/jmods;${inputs.files.singleFile.absolutePath}",
+        "--add-modules", "java.base,java.desktop,java.logging,java.net.http,java.security.jgss,jdk.unsupported,java.security.sasl,jdk.crypto.ec,jdk.crypto.cryptoki",
         "--output", outputs.files.singleFile.absolutePath,
     )
 }
@@ -168,11 +240,10 @@ tasks.register<Exec>("jpackage") {
     val javaHome = System.getProperty("java.home")
     val jpackageBin = Paths.get(javaHome, "bin", "jpackage")
 
-    val appContent = Paths.get(javaHome).parent.resolve("Frameworks").toFile()
     val runtimeImage = tasks.named("jlink").get().outputs.files.singleFile
     val modulePath = tasks.named("copyJar").get().outputs.files.singleFile
 
-    inputs.files(appContent, runtimeImage, modulePath)
+    inputs.files(runtimeImage, modulePath)
 
     val outputDir = layout.buildDirectory.dir("jpackage")
     val name = "JavaElectronExample"
@@ -184,21 +255,21 @@ tasks.register<Exec>("jpackage") {
 
     commandLine(
         jpackageBin,
-        "--app-content", appContent.absolutePath,
         "--name", name,
         "--app-version", version,
+        "--main-jar", modulePath.resolve("${project.name}-$version.jar"),
         "--main-class", mainClassName,
-        "--module", "tanin.javaelectron/tanin.javaelectron.Main",
         "--runtime-image", runtimeImage.absolutePath,
         "--vendor", "tanin.javaelectron",
-        "--module-path", modulePath.absolutePath,
+        "--input", modulePath.absolutePath,
         "--dest", outputDir.get().asFile.absolutePath,
         "--mac-package-identifier", "tanin.javaelectron.macos.app",
         "--mac-package-name", "Java Electron",
         "--mac-package-signing-prefix", "tanin.javaelectron.macos.",
         "--mac-sign",
         "--mac-signing-key-user-name", "Developer ID Application: Tanin Na Nakorn (S6482XAL5E)",
-        "--mac-entitlements", "entitlements.plist"
+        "--mac-entitlements", "entitlements.plist",
+        "--java-options", "-XstartOnFirstThread"
     )
 }
 
@@ -213,6 +284,21 @@ tasks.register<Exec>("notarize") {
         "notarytool",
         "submit",
         "--wait", "-p", "personal",
+        inputs.files.singleFile.absolutePath,
+    )
+}
+
+
+tasks.register<Exec>("staple") {
+    dependsOn("notarize")
+
+    inputs.file(tasks.named("jpackage").get().outputs.files.singleFile)
+
+    commandLine(
+        "/usr/bin/xcrun",
+        "stapler",
+        "staple",
+        "-v",
         inputs.files.singleFile.absolutePath,
     )
 }

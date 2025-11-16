@@ -7,6 +7,7 @@ import com.renomad.minum.web.StatusLine;
 import org.bouncycastle.operator.OperatorCreationException;
 import tanin.ejwf.MinumBuilder;
 import tanin.ejwf.SelfSignedCertificate;
+import tanin.jpsi.Browser;
 
 import java.io.IOException;
 import java.security.KeyStoreException;
@@ -46,7 +47,8 @@ public class Main {
     logger.info("Starting...");
     main.start();
 
-    var browser = new Browser("https://localhost:8444", false, false, cert, csrfToken);
+    var browser = new Browser("http://localhost:19999", cert, csrfToken);
+    browser.run();
 
     logger.info("Blocking...");
     main.minum.block();

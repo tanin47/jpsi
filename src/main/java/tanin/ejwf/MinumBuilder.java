@@ -20,7 +20,7 @@ import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
-import static com.renomad.minum.web.RequestLine.Method.GET;
+import static com.renomad.minum.web.RequestLine.Method.*;
 import static com.renomad.minum.web.StatusLine.StatusCode.CODE_403_FORBIDDEN;
 
 public class MinumBuilder {
@@ -70,11 +70,17 @@ public class MinumBuilder {
     wf.registerPreHandler((inputs) -> {
       var request = inputs.clientRequest();
       var csrfTokens = request.getHeaders().valueByKey("Java-Electron-Csrf-Token");
+      var method = request.getRequestLine().getMethod();
 
-      if (csrfTokens != null && !csrfTokens.isEmpty() && csrfTokens.getFirst().equals(csrfToken)) {
+      if (
+        // TODO: Figure out how to inject Java-Electron-Csrf-Token at the browser level.
+        // Then, we will be able to support CSRF on all requests.
+        (method == GET || method == HEAD || method == OPTIONS) ||
+        (csrfTokens != null && !csrfTokens.isEmpty() && csrfTokens.getFirst().equals(csrfToken))
+      ) {
         // ok
       } else {
-        return Response.buildResponse(CODE_403_FORBIDDEN, Map.of(), "Java-Electron-Csrf-Token is invalid.");
+        return Response.buildResponse(CODE_403_FORBIDDEN, Map.of("Content-Type", "text/plain"), "Java-Electron-Csrf-Token is invalid.");
       }
 
       ThrowingFunction<IRequest, IResponse> endpoint = inputs.endpoint();
