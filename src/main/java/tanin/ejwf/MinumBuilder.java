@@ -4,7 +4,6 @@ import com.renomad.minum.logging.Logger;
 import com.renomad.minum.state.Constants;
 import com.renomad.minum.state.Context;
 import com.renomad.minum.web.*;
-import org.bouncycastle.operator.OperatorCreationException;
 
 import java.io.IOException;
 import java.net.URI;
@@ -12,9 +11,14 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
@@ -46,7 +50,7 @@ public class MinumBuilder {
 
   public static final boolean IS_LOCAL_DEV = Files.exists(Path.of("local_dev_marker.ejwf"));
 
-  public static FullSystem build(int port, String keyStorePath, String keyStorePassword, String csrfToken) throws CertificateException, KeyStoreException, IOException, NoSuchAlgorithmException, OperatorCreationException {
+  public static FullSystem build(String keyStorePath, String keyStorePassword) throws CertificateException, KeyStoreException, IOException, NoSuchAlgorithmException, KeyManagementException {
     if (IS_LOCAL_DEV) {
       logger.info("Running in the local development mode. Hot-Reload Module is enabled. `npm run hmr` must be running in a separate terminal");
     } else {
@@ -54,9 +58,9 @@ public class MinumBuilder {
     }
 
     var props = new Properties();
-    props.setProperty("SERVER_PORT", "" + port);
-    props.setProperty("SSL_SERVER_PORT", "8444");
-//    props.setProperty("LOG_LEVELS", "ASYNC_ERROR,AUDIT");
+    props.setProperty("SERVER_PORT", "0");
+    props.setProperty("SSL_SERVER_PORT", "0");
+    props.setProperty("LOG_LEVELS", "ASYNC_ERROR,AUDIT");
     props.setProperty("IS_THE_BRIG_ENABLED", "false");
 
     props.setProperty("KEYSTORE_PATH", keyStorePath);
@@ -67,35 +71,34 @@ public class MinumBuilder {
     var minum = new FullSystem(context).start();
     var wf = minum.getWebFramework();
 
-    wf.registerPreHandler((inputs) -> {
-      var request = inputs.clientRequest();
-      var csrfTokens = request.getHeaders().valueByKey("Java-Electron-Csrf-Token");
-      var method = request.getRequestLine().getMethod();
-
-      if (
-        // TODO: Figure out how to inject Java-Electron-Csrf-Token at the browser level.
-        // Then, we will be able to support CSRF on all requests.
-        (method == GET || method == HEAD || method == OPTIONS) ||
-        (csrfTokens != null && !csrfTokens.isEmpty() && csrfTokens.getFirst().equals(csrfToken))
-      ) {
-        // ok
-      } else {
-        return Response.buildResponse(CODE_403_FORBIDDEN, Map.of("Content-Type", "text/plain"), "Java-Electron-Csrf-Token is invalid.");
-      }
-
-      ThrowingFunction<IRequest, IResponse> endpoint = inputs.endpoint();
-      return endpoint.apply(inputs.clientRequest());
-    });
-
     if (IS_LOCAL_DEV) {
-      var httpClient = java.net.http.HttpClient.newHttpClient();
+      var trustAllCerts = new TrustManager[]{
+        new X509TrustManager() {
+          public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+            return null;
+          }
+
+          public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {
+          }
+
+          public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {
+          }
+        }
+      };
+
+      var sslContext = SSLContext.getInstance("TLS");
+      sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+
+      var httpClient = java.net.http.HttpClient.newBuilder()
+        .sslContext(sslContext)
+        .build();
       wf.registerPartialPath(
         GET,
         "__webpack_hmr",
         request -> {
           var httpRequest = HttpRequest
             .newBuilder()
-            .uri(URI.create("http://localhost:8090/__webpack_hmr"))
+            .uri(URI.create("https://localhost:8090/__webpack_hmr"))
             .GET()
             .build();
           var response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofByteArray());
@@ -133,7 +136,7 @@ public class MinumBuilder {
 
           var httpRequest = HttpRequest
             .newBuilder()
-            .uri(URI.create("http://localhost:8090/assets/" + assetPath))
+            .uri(URI.create("https://localhost:8090/assets/" + assetPath))
             .GET()
             .build();
           var response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofByteArray());

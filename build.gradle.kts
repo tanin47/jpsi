@@ -9,6 +9,9 @@ plugins {
     jacoco
 }
 
+val macDeveloperApplicationCertName = "Developer ID Application: Tanin Na Nakorn (S6482XAL5E)"
+val codesignPackagePrefix = "tanin.javaelectron.macos."
+
 group = "tanin.javaelectron"
 version = "1.0.0"
 
@@ -28,6 +31,15 @@ java {
     }
 }
 
+tasks.named<JavaCompile>("compileJava") {
+    options.compilerArgs.addAll(listOf(
+        "--add-exports",
+        "java.base/sun.security.x509=ALL-UNNAMED",
+        "--add-exports",
+        "java.base/sun.security.tools.keytool=ALL-UNNAMED",
+    ))
+}
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test) // tests are required to run before generating the report
 
@@ -41,11 +53,13 @@ tasks.jacocoTestReport {
 repositories {
     mavenCentral()
     maven { url = uri("https://jitpack.io") }
+    maven { url = uri("https://repo.casterlabs.co/maven") }
 }
 
 dependencies {
-    implementation("org.bouncycastle:bcpkix-lts8on:2.73.9")
-    implementation("com.github.webview:webview_java:1.3.0")
+    implementation("net.java.dev.jna:jna:5.14.0")
+    implementation("net.java.dev.jna:jna-platform:5.14.0")
+    implementation("com.eclipsesource.minimal-json:minimal-json:0.9.5")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -71,7 +85,13 @@ tasks.named<Test>("test") {
 var mainClassName = "tanin.javaelectron.Main"
 application {
     mainClass.set(mainClassName)
-    applicationDefaultJvmArgs = listOf("-XstartOnFirstThread")
+    applicationDefaultJvmArgs = listOf(
+        "-XstartOnFirstThread",
+        "--add-exports",
+        "java.base/sun.security.x509=ALL-UNNAMED",
+        "--add-exports",
+        "java.base/sun.security.tools.keytool=ALL-UNNAMED",
+    )
 }
 
 tasks.jar {
@@ -167,9 +187,9 @@ private fun signInJar(jarFile: File) {
                 "--timestamp",
                 "--force",
                 "--prefix",
-                "tanin.javaelectron.macos.",
+                codesignPackagePrefix,
                 "--sign",
-                "Developer ID Application: Tanin Na Nakorn (S6482XAL5E)",
+                macDeveloperApplicationCertName,
                 libFile.absolutePath
             )
 
@@ -265,11 +285,12 @@ tasks.register<Exec>("jpackage") {
         "--dest", outputDir.get().asFile.absolutePath,
         "--mac-package-identifier", "tanin.javaelectron.macos.app",
         "--mac-package-name", "Java Electron",
-        "--mac-package-signing-prefix", "tanin.javaelectron.macos.",
+        "--mac-package-signing-prefix", codesignPackagePrefix,
         "--mac-sign",
-        "--mac-signing-key-user-name", "Developer ID Application: Tanin Na Nakorn (S6482XAL5E)",
+        "--mac-signing-key-user-name", macDeveloperApplicationCertName,
         "--mac-entitlements", "entitlements.plist",
-        "--java-options", "-XstartOnFirstThread"
+        // -XstartOnFirstThread requires for MacOs
+        "--java-options", "-XstartOnFirstThread --add-exports java.base/sun.security.x509=ALL-UNNAMED --add-exports java.base/sun.security.tools.keytool=ALL-UNNAMED"
     )
 }
 

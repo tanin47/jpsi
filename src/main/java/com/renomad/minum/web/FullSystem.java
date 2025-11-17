@@ -172,7 +172,7 @@ public final class FullSystem {
         return server;
     }
 
-    IServer getSslServer() {
+    public IServer getSslServer() {
         return sslServer;
     }
 

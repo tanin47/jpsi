@@ -28,7 +28,7 @@ async function submit() {
 
 <div class="container mx-auto p-8 flex flex-col gap-6">
   <div class="text-2xl font-bold">javaelectron</div>
-  <p>Build cross-platform desktop apps with Java, JavaScript, HTML, and CSS</p>
+  <p>It's like Electron but for Java. Build cross-platform desktop apps with Java, JavaScript, HTML, and CSS</p>
   <div>
     <Button {isLoading} onClick={submit}>
       Click to communicate with Java
