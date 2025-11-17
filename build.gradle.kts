@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import java.io.ByteArrayOutputStream
 import java.lang.IllegalStateException
 import java.nio.file.Paths
 import kotlin.io.path.createTempDirectory
@@ -267,16 +268,14 @@ tasks.register<Exec>("jpackage") {
     inputs.files(runtimeImage, modulePath)
 
     val outputDir = layout.buildDirectory.dir("jpackage")
-    val name = "JavaElectronExample"
-    val version = "1.0.0"
-    val dmgName = "$name-$version.dmg"
+    val outputFile = outputDir.get().asFile.resolve("${project.name}-$version.dmg")
 
-    outputs.file(outputDir.get().asFile.resolve(dmgName))
+    outputs.file(outputFile)
     outputDir.get().asFile.deleteRecursively()
 
     commandLine(
         jpackageBin,
-        "--name", name,
+        "--name", project.name,
         "--app-version", version,
         "--main-jar", modulePath.resolve("${project.name}-$version.jar"),
         "--main-class", mainClassName,
@@ -295,6 +294,46 @@ tasks.register<Exec>("jpackage") {
     )
 }
 
+
+interface InjectedExecOps {
+    @get:Inject val execOps: ExecOperations
+}
+
+tasks.register("jpackageAndExtractApp") {
+    dependsOn("jpackage")
+
+    inputs.file(tasks.named("jpackage").get().outputs.files.singleFile)
+    outputs.dir(layout.buildDirectory.dir("jpackage-extracted-app"))
+    outputs.files.singleFile.deleteRecursively()
+
+    val injected = project.objects.newInstance<InjectedExecOps>()
+    doLast {
+        var volumeName: String? = null
+        val output = ByteArrayOutputStream()
+        injected.execOps.exec {
+            commandLine("/usr/bin/hdiutil", "attach", "-readonly", inputs.files.singleFile.absolutePath)
+            standardOutput = output
+        }
+
+        volumeName = output.toString().lines()
+            .firstNotNullOfOrNull { line -> Regex("/Volumes/([^ ]*)").find(line)?.groupValues?.get(1) }
+
+        if (volumeName == null) {
+            throw Exception("Unable to extract the volumn name from the hdiutil command. Output: $output")
+        }
+        injected.execOps.exec {
+            commandLine("cp", "-R", "/Volumes/$volumeName/.", outputs.files.singleFile.absolutePath)
+        }
+
+        injected.execOps.exec {
+            commandLine("/usr/bin/hdiutil", "detach", "/Volumes/$volumeName")
+        }
+
+        injected.execOps.exec {
+            commandLine("/usr/bin/open", outputs.files.singleFile.absolutePath)
+        }
+    }
+}
 
 tasks.register<Exec>("notarize") {
     dependsOn("jpackage")
