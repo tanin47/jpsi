@@ -1,10 +1,11 @@
 package com.renomad.minum.queue;
 
-import com.renomad.minum.state.Context;
 import com.renomad.minum.logging.ILogger;
+import com.renomad.minum.state.Context;
 import com.renomad.minum.utils.*;
 
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * This class provides the ability to pop items into

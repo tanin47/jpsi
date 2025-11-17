@@ -2,7 +2,10 @@ package com.renomad.minum.web;
 
 import com.renomad.minum.logging.ILogger;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.charset.Charset;

@@ -3,8 +3,13 @@ package tanin.ejwf;
 import com.renomad.minum.logging.Logger;
 import com.renomad.minum.state.Constants;
 import com.renomad.minum.state.Context;
-import com.renomad.minum.web.*;
+import com.renomad.minum.web.FullSystem;
+import com.renomad.minum.web.Response;
+import com.renomad.minum.web.StatusLine;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -15,17 +20,12 @@ import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
-
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
-import static com.renomad.minum.web.RequestLine.Method.*;
-import static com.renomad.minum.web.StatusLine.StatusCode.CODE_403_FORBIDDEN;
+import static com.renomad.minum.web.RequestLine.Method.GET;
 
 public class MinumBuilder {
   private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(MinumBuilder.class.getName());

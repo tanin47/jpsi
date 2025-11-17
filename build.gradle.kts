@@ -9,7 +9,9 @@ plugins {
     jacoco
 }
 
+// TODO: Replace the below with the name of your 'Developer ID Application' cert which you can get from https://developer.apple.com/account/resources/certificates/list
 val macDeveloperApplicationCertName = "Developer ID Application: Tanin Na Nakorn (S6482XAL5E)"
+// TODO: Replace the below with the prefix of your bundle ID which you can get from https://developer.apple.com/account/resources/identifiers/list
 val codesignPackagePrefix = "tanin.javaelectron.macos."
 
 group = "tanin.javaelectron"
@@ -58,7 +60,6 @@ repositories {
 
 dependencies {
     implementation("net.java.dev.jna:jna:5.14.0")
-    implementation("net.java.dev.jna:jna-platform:5.14.0")
     implementation("com.eclipsesource.minimal-json:minimal-json:0.9.5")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
@@ -304,7 +305,9 @@ tasks.register<Exec>("notarize") {
        "/usr/bin/xcrun",
         "notarytool",
         "submit",
-        "--wait", "-p", "personal",
+        "--wait",
+        // TODO: Replace -p value with your notarytool profile's name. You can set it up using `xcrun notarytool store-credentials`.
+        "-p", "personal",
         inputs.files.singleFile.absolutePath,
     )
 }

@@ -7,16 +7,52 @@ import com.sun.jna.Native;
 import com.sun.jna.Structure;
 import com.sun.jna.ptr.PointerByReference;
 
+import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.logging.Logger;
 
 interface WebviewNative extends Library {
+    static final Logger logger = Logger.getLogger(WebviewNative.class.getName());
     static final WebviewNative N = runSetup();
 
     private static WebviewNative runSetup() {
-      // TODO: make this work with jpackage
-      System.setProperty("jna.library.path", "src/main/resources/dev/webview/webview_java/natives/aarch64/macos");
+      logger.info("Preparing Webview Native library...");
+      var buildDir = new File("build/webview");
+      if (!buildDir.exists()) {
+        buildDir.mkdirs();
+      }
+
+      var libraries = new String[] {
+        "/webview/libwebview.dylib"
+      };
+
+      for (String lib : libraries) {
+        logger.info("Preparing " + lib);
+        File target = new File(buildDir, new File(lib).getName());
+        if (target.exists()) {
+          target.delete();
+        }
+        target.deleteOnExit();
+
+        try (InputStream in = WebviewNative.class.getResourceAsStream(lib.toLowerCase())) {
+          assert in != null;
+          Files.copy(in, target.toPath());
+        } catch (Exception e) {
+          if (e.getMessage() != null && e.getMessage().contains("used by another")) continue; // Ignore.
+
+          System.err.println("Unable to extract native: " + lib);
+          throw new RuntimeException(e);
+        }
+
+        System.load(target.getAbsolutePath()); // Load it. This is so Native will be able to link it.
+      }
+
+      System.setProperty("jna.library.path", "./build/webview");
+
       return Native.load(
         "webview",
         WebviewNative.class,

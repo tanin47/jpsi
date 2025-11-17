@@ -1,7 +1,7 @@
 package com.renomad.minum.queue;
 
-import com.renomad.minum.state.Context;
 import com.renomad.minum.logging.ILogger;
+import com.renomad.minum.state.Context;
 import com.renomad.minum.utils.TimeUtils;
 
 /**
