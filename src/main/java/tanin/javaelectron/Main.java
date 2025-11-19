@@ -51,9 +51,9 @@ public class Main {
     var browser = new Browser("https://localhost:" + sslPort + "/landing?authKey=" + authKey, cert);
     browser.run();
 
-    logger.info("Blocking...");
-    main.minum.block();
-    logger.info("Exiting");
+//    logger.info("Blocking...");
+//    main.minum.block();
+//    logger.info("Exiting");
   }
 
   public FullSystem minum;

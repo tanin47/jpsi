@@ -88,7 +88,7 @@ var mainClassName = "tanin.javaelectron.Main"
 application {
     mainClass.set(mainClassName)
     applicationDefaultJvmArgs = listOf(
-        "-XstartOnFirstThread",
+//        "-XstartOnFirstThread",
         "--add-exports",
         "java.base/sun.security.x509=ALL-UNNAMED",
         "--add-exports",
