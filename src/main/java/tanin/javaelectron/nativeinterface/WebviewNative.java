@@ -1,4 +1,4 @@
-package tanin.javaelectron;
+package tanin.javaelectron.nativeinterface;
 
 
 import com.sun.jna.Callback;
@@ -15,43 +15,12 @@ import java.util.Collections;
 import java.util.List;
 import java.util.logging.Logger;
 
-interface WebviewNative extends Library {
+public interface WebviewNative extends Library {
     static final Logger logger = Logger.getLogger(WebviewNative.class.getName());
     static final WebviewNative N = runSetup();
 
     private static WebviewNative runSetup() {
-      logger.info("Preparing Webview Native library...");
-      var buildDir = new File("build/webview");
-      if (!buildDir.exists()) {
-        buildDir.mkdirs();
-      }
-
-      var libraries = new String[] {
-        "/webview/libwebview.dylib"
-      };
-
-      for (String lib : libraries) {
-        logger.info("Preparing " + lib);
-        File target = new File(buildDir, new File(lib).getName());
-        if (target.exists()) {
-          target.delete();
-        }
-        target.deleteOnExit();
-
-        try (InputStream in = WebviewNative.class.getResourceAsStream(lib.toLowerCase())) {
-          assert in != null;
-          Files.copy(in, target.toPath());
-        } catch (Exception e) {
-          if (e.getMessage() != null && e.getMessage().contains("used by another")) continue; // Ignore.
-
-          System.err.println("Unable to extract native: " + lib);
-          throw new RuntimeException(e);
-        }
-
-        System.load(target.getAbsolutePath()); // Load it. This is so Native will be able to link it.
-      }
-
-      System.setProperty("jna.library.path", "./build/webview");
+      Base.prepareLib("/webview/libwebview.dylib");
 
       return Native.load(
         "webview",

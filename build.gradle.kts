@@ -34,7 +34,28 @@ java {
     }
 }
 
+tasks.register<Exec>("compileSwift") {
+    group = "build"
+    description = "Compile Swift code and output the dylib to the resource directory."
+
+    val inputFile = layout.projectDirectory.file("src/main/swift/MacOsApi.swift").asFile
+    val outputFile = layout.projectDirectory.file("src/main/resources/libMacOsApi.dylib").asFile
+
+    println("Compiling Swift code to $outputFile")
+
+    commandLine(
+        "swiftc",
+        "-emit-library",
+        inputFile.absolutePath,
+        "-target",
+        "arm64-apple-macos11",
+        "-o",
+        outputFile.absolutePath,
+    )
+}
+
 tasks.named<JavaCompile>("compileJava") {
+    dependsOn("compileSwift")
     options.compilerArgs.addAll(listOf(
         "--add-exports",
         "java.base/sun.security.x509=ALL-UNNAMED",
